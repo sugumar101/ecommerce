@@ -1,14 +1,43 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AuthForm from "@/components/AuthForm";
 import SocialProviders from "@/components/SocialProviders";
+import { signUp } from "@/lib/auth/actions";
 
 export default function SignUpPage() {
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Sign up form submitted");
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirm-password") as string;
+    const name = email.split("@")[0];
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    try {
+      const result = await signUp(email, password, name);
+      
+      if (result.success) {
+        router.push("/");
+        router.refresh();
+      } else {
+        setError(result.error || "Failed to create account");
+      }
+    } catch {
+      setError("An unexpected error occurred");
+    }
   };
 
   return (
@@ -21,6 +50,12 @@ export default function SignUpPage() {
           Sign up to get started with Nike Store
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
 
       <AuthForm type="signup" onSubmit={handleSubmit} />
 
