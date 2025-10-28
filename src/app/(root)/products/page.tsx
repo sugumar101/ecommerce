@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import ProductCard from '@/components/ProductCard';
 import Filters from '@/components/Filters';
 import Sort from '@/components/Sort';
@@ -129,7 +130,9 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
             {displayProducts.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {displayProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <Link key={product.id} href={`/products/${product.id}`}>
+                    <ProductCard product={product} />
+                  </Link>
                 ))}
               </div>
             ) : (
