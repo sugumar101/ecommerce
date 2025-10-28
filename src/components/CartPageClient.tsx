@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import CartItem from './CartItem';
+import CartSummary from './CartSummary';
 import { useCartStore, CartItemData } from '@/store/cart.store';
 import { updateCartItem, removeCartItem } from '@/lib/actions/cart';
 
@@ -11,9 +11,8 @@ interface CartPageClientProps {
   isAuthenticated: boolean;
 }
 
-export default function CartPageClient({ initialItems, isAuthenticated }: CartPageClientProps) {
-  const router = useRouter();
-  const { items, setItems, updateItem, removeItem, getSubtotal } = useCartStore();
+export default function CartPageClient({ initialItems }: CartPageClientProps) {
+  const { items, setItems, updateItem, removeItem, getSubtotal, getTotalItems } = useCartStore();
 
   useEffect(() => {
     setItems(initialItems);
@@ -39,17 +38,10 @@ export default function CartPageClient({ initialItems, isAuthenticated }: CartPa
     }
   };
 
-  const handleCheckout = () => {
-    if (!isAuthenticated) {
-      router.push('/auth?redirect=/cart');
-    } else {
-      router.push('/checkout');
-    }
-  };
-
   const subtotal = getSubtotal();
   const deliveryFee = 2.00;
   const total = subtotal + deliveryFee;
+  const itemCount = getTotalItems();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -65,35 +57,12 @@ export default function CartPageClient({ initialItems, isAuthenticated }: CartPa
       </div>
 
       <div className="lg:col-span-1">
-        <div className="bg-white rounded-lg p-6 shadow-sm sticky top-8">
-          <h2 className="text-2xl font-bold text-dark-900 mb-6">Summary</h2>
-          
-          <div className="space-y-4 mb-6">
-            <div className="flex justify-between text-base">
-              <span className="text-dark-700">Subtotal</span>
-              <span className="font-semibold text-dark-900">${subtotal.toFixed(2)}</span>
-            </div>
-            
-            <div className="flex justify-between text-base">
-              <span className="text-dark-700">Estimated Delivery & Handling</span>
-              <span className="font-semibold text-dark-900">${deliveryFee.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="border-t border-light-200 pt-4 mb-6">
-            <div className="flex justify-between text-lg">
-              <span className="font-semibold text-dark-900">Total</span>
-              <span className="font-bold text-dark-900">${total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleCheckout}
-            className="w-full py-4 bg-dark-900 text-light-100 rounded-full text-base font-medium hover:bg-dark-700 transition-colors"
-          >
-            Proceed to Checkout
-          </button>
-        </div>
+        <CartSummary
+          subtotal={subtotal}
+          deliveryFee={deliveryFee}
+          total={total}
+          itemCount={itemCount}
+        />
       </div>
     </div>
   );
