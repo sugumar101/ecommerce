@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import CartIndicator from "./CartIndicator";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -50,12 +51,7 @@ export default function Navbar() {
             >
               Search
             </Link>
-            <Link
-              href="/cart"
-              className="text-gray-900 hover:text-gray-600 text-base font-medium transition-colors"
-            >
-              My Cart (2)
-            </Link>
+            <CartIndicator />
           </div>
 
           <div className="md:hidden flex items-center">
@@ -111,12 +107,9 @@ export default function Navbar() {
             >
               Search
             </Link>
-            <Link
-              href="/cart"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              My Cart (2)
-            </Link>
+            <div className="px-3 py-2">
+              <CartIndicator />
+            </div>
           </div>
         </div>
       )}

@@ -212,21 +212,17 @@ export async function getGuestSession(): Promise<string | null> {
 
 /**
  * Merge guest cart with user cart after login/signup
- * This is a placeholder - actual cart merging logic will be implemented
- * when cart functionality is added
  */
 export async function mergeGuestCartWithUserCart(
-  _userId: string
+  userId: string
 ): Promise<ActionResult> {
   try {
-    const guestSessionToken = await getGuestSession();
+    const { mergeGuestCartToUserCart } = await import('@/lib/actions/cart');
+    const result = await mergeGuestCartToUserCart(userId);
 
-    if (!guestSessionToken) {
-      return { success: true };
+    if (!result.success) {
+      return result;
     }
-
-
-    await db.delete(guest).where(eq(guest.sessionToken, guestSessionToken));
 
     const cookieStore = await cookies();
     cookieStore.delete("guest_session");
