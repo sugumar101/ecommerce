@@ -8,9 +8,9 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navLinks = [
-    { name: "Men", href: "/men" },
-    { name: "Women", href: "/women" },
-    { name: "Kids", href: "/kids" },
+    { name: "Men", href: "/products?gender=men" },
+    { name: "Women", href: "/products?gender=women" },
+    { name: "All Products", href: "/products" },
     { name: "Collections", href: "/collections" },
     { name: "Contact", href: "/contact" },
   ];
