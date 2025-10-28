@@ -1,46 +1,135 @@
-import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingBag, Heart, Star } from 'lucide-react';
+import { Suspense } from 'react';
 import ProductGallery from '@/components/ProductGallery';
 import SizePicker from '@/components/SizePicker';
 import CollapsibleSection from '@/components/CollapsibleSection';
-import ProductCard from '@/components/ProductCard';
-import { getProductDetail, getRelatedProducts } from '@/lib/data/mockProductDetails';
+import { ReviewsSection } from '@/components/ReviewsSection';
+import { RecommendedSection } from '@/components/RecommendedSection';
+import { getProduct } from '@/lib/actions/product';
+
+export const revalidate = 0;
 
 interface ProductPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
+}
+
+function ReviewsSkeleton() {
+  return (
+    <section className="mt-12">
+      <h2 className="text-2xl font-bold mb-6">Reviews</h2>
+      <div className="space-y-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="border-b border-light-200 pb-6 animate-pulse">
+            <div className="h-4 bg-light-200 rounded w-32 mb-2"></div>
+            <div className="h-4 bg-light-200 rounded w-48 mb-2"></div>
+            <div className="h-16 bg-light-200 rounded"></div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecommendedSkeleton() {
+  return (
+    <section className="mt-12">
+      <h2 className="text-2xl font-bold mb-6">You Might Also Like</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-lg overflow-hidden shadow-sm animate-pulse">
+            <div className="aspect-square bg-light-200"></div>
+            <div className="p-4 space-y-2">
+              <div className="h-4 bg-light-200 rounded w-20"></div>
+              <div className="h-4 bg-light-200 rounded"></div>
+              <div className="h-4 bg-light-200 rounded w-24"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const { id } = await params;
-  const product = getProductDetail(id);
+  const { id } = params;
+  const product = await getProduct(id);
 
   if (!product) {
-    notFound();
+    return (
+      <div className="min-h-screen bg-light-100 flex items-center justify-center">
+        <div className="text-center space-y-4 px-4">
+          <h1 className="text-4xl font-bold text-dark-900">Product Not Found</h1>
+          <p className="text-lg text-dark-700">
+            The product you&apos;re looking for doesn&apos;t exist or has been removed.
+          </p>
+          <Link
+            href="/products"
+            className="inline-block mt-4 px-6 py-3 bg-dark-900 text-light-100 rounded-md hover:bg-dark-700 transition-colors"
+          >
+            Back to Products
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  const relatedProducts = getRelatedProducts(id, 4);
+  interface ColorGroup {
+    color: {
+      id: string;
+      name: string;
+      hexCode: string;
+    };
+    images: string[];
+    variants: typeof product.variants;
+  }
 
-  const defaultVariant = product.variants.find((v) => v.id === product.defaultVariantId);
-  const currentPrice = defaultVariant?.sizes[0]?.salePrice || product.price;
-  const hasDiscount = defaultVariant?.sizes[0]?.salePrice !== null;
-  const discountPercentage = hasDiscount && product.compareAtPrice
-    ? Math.round(((parseFloat(product.compareAtPrice) - parseFloat(currentPrice)) / parseFloat(product.compareAtPrice)) * 100)
+  const variantsByColor = product.variants.reduce((acc, variant) => {
+    const colorId = variant.color.id;
+    if (!acc[colorId]) {
+      acc[colorId] = {
+        color: variant.color,
+        images: variant.images.length > 0 ? variant.images : product.genericImages,
+        variants: [],
+      };
+    }
+    acc[colorId].variants.push(variant);
+    return acc;
+  }, {} as Record<string, ColorGroup>);
+
+  const galleryVariants = Object.values(variantsByColor).map((group) => ({
+    id: group.color.id,
+    colorName: group.color.name,
+    colorHex: group.color.hexCode,
+    images: group.images,
+  }));
+
+  const prices = product.variants.map((v) => parseFloat(v.salePrice || v.price));
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const currentPrice = minPrice.toFixed(2);
+
+  const hasDiscount = product.variants.some((v) => v.salePrice !== null);
+  const compareAtPrice = hasDiscount ? maxPrice.toFixed(2) : null;
+  const discountPercentage = hasDiscount && compareAtPrice
+    ? Math.round(((parseFloat(compareAtPrice) - parseFloat(currentPrice)) / parseFloat(compareAtPrice)) * 100)
     : 0;
 
-  const allSizes = defaultVariant?.sizes || [];
+  const uniqueSizes = Array.from(
+    new Map(
+      product.variants.map((v) => [v.size.id, { id: v.size.id, name: v.size.name, inStock: v.inStock }])
+    ).values()
+  );
 
   return (
     <div className="min-h-screen bg-light-100">
-      {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {/* Left Column - Gallery */}
           <div className="lg:sticky lg:top-8 lg:self-start">
             <ProductGallery
               productName={product.name}
-              variants={product.variants}
-              defaultVariantId={product.defaultVariantId}
+              variants={galleryVariants}
+              defaultVariantId={galleryVariants[0]?.id}
             />
           </div>
 
@@ -59,7 +148,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <span className="text-dark-900">{product.name}</span>
             </nav>
 
-            {/* Product Title & Brand */}
             <div className="space-y-2">
               <h1 className="text-3xl font-bold text-dark-900 lg:text-4xl">
                 {product.name}
@@ -69,15 +157,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
               </p>
             </div>
 
-            {/* Price & Discount */}
             <div className="flex items-center gap-3">
               <span className="text-2xl font-bold text-dark-900">
                 ${currentPrice}
               </span>
-              {hasDiscount && product.compareAtPrice && (
+              {hasDiscount && compareAtPrice && (
                 <>
                   <span className="text-xl text-dark-500 line-through">
-                    ${product.compareAtPrice}
+                    ${compareAtPrice}
                   </span>
                   <span className="rounded-md bg-red px-2 py-1 text-sm font-medium text-light-100">
                     {discountPercentage}% OFF
@@ -108,8 +195,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               </p>
             </div>
 
-            {/* Size Picker */}
-            <SizePicker sizes={allSizes} />
+            <SizePicker sizes={uniqueSizes} />
 
             {/* Action Buttons */}
             <div className="flex gap-3">
@@ -171,65 +257,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 </div>
               </CollapsibleSection>
 
-              <CollapsibleSection title="Reviews">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-4 w-4 ${
-                              i < 4 ? 'fill-orange text-orange' : 'fill-light-300 text-light-300'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-sm font-medium text-dark-900">4.0 out of 5</span>
-                    </div>
-                    <span className="text-sm text-dark-700">128 reviews</span>
-                  </div>
-                  <p className="text-sm text-dark-700">
-                    Customer reviews help you make informed decisions. Sign in to write a review.
-                  </p>
-                </div>
-              </CollapsibleSection>
             </div>
           </div>
         </div>
 
-        {/* You Might Also Like Section */}
-        {relatedProducts.length > 0 && (
-          <div className="mt-16">
-            <h2 className="text-2xl font-bold text-dark-900 mb-6">You Might Also Like</h2>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {relatedProducts.map((relatedProduct) => {
-                const relatedVariant = relatedProduct.variants[0];
-                const relatedPrice = relatedVariant?.sizes[0]?.salePrice || relatedProduct.price;
-                const relatedImage = relatedVariant?.images[0] || relatedProduct.genericImages[0];
+        <Suspense fallback={<ReviewsSkeleton />}>
+          <ReviewsSection productId={id} />
+        </Suspense>
 
-                return (
-                  <Link key={relatedProduct.id} href={`/products/${relatedProduct.id}`}>
-                    <ProductCard
-                      product={{
-                        id: relatedProduct.id,
-                        name: relatedProduct.name,
-                        description: relatedProduct.description,
-                        price: relatedPrice,
-                        image: relatedImage,
-                        category: relatedProduct.category.name,
-                        brand: relatedProduct.brand.name,
-                        stock: relatedVariant?.sizes.reduce((sum, s) => sum + s.inStock, 0) || 0,
-                        createdAt: null,
-                        updatedAt: null,
-                      }}
-                    />
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <Suspense fallback={<RecommendedSkeleton />}>
+          <RecommendedSection productId={id} />
+        </Suspense>
       </div>
     </div>
   );

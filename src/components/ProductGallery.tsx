@@ -3,11 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { ImageOff, Check } from 'lucide-react';
-import { ProductDetailVariant } from '@/lib/data/mockProductDetails';
+
+interface GalleryVariant {
+  id: string;
+  colorName: string;
+  colorHex: string;
+  images: string[];
+}
 
 interface ProductGalleryProps {
   productName: string;
-  variants: ProductDetailVariant[];
+  variants: GalleryVariant[];
   defaultVariantId: string;
 }
 
@@ -21,7 +27,7 @@ export default function ProductGallery({
   const [brokenUrls, setBrokenUrls] = useState<Set<string>>(new Set());
 
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
-  const validImages = selectedVariant?.images.filter((url) => !brokenUrls.has(url)) || [];
+  const validImages = selectedVariant?.images.filter((url) => url && !brokenUrls.has(url)) || [];
   
   const safeImageIndex = selectedImageIndex >= validImages.length && validImages.length > 0 
     ? 0 
@@ -79,7 +85,7 @@ export default function ProductGallery({
         {currentImage ? (
           <Image
             src={currentImage}
-            alt={`${productName} - ${selectedVariant?.color.name}`}
+            alt={`${productName} - ${selectedVariant?.colorName}`}
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px"
@@ -128,7 +134,7 @@ export default function ProductGallery({
       {variantsWithImages.length > 1 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-dark-900">
-            Color: {selectedVariant?.color.name}
+            Color: {selectedVariant?.colorName}
           </h3>
           <div className="flex flex-wrap gap-2">
             {variantsWithImages.map((variant) => (
@@ -140,12 +146,12 @@ export default function ProductGallery({
                     ? 'border-dark-900'
                     : 'border-light-300 hover:border-dark-700'
                 }`}
-                aria-label={`Select ${variant.color.name} color`}
+                aria-label={`Select ${variant.colorName} color`}
                 aria-pressed={variant.id === selectedVariantId}
               >
                 <div
                   className="h-full w-full"
-                  style={{ backgroundColor: variant.color.hexCode }}
+                  style={{ backgroundColor: variant.colorHex }}
                 />
                 {variant.id === selectedVariantId && (
                   <div className="absolute inset-0 flex items-center justify-center bg-dark-900 bg-opacity-20">

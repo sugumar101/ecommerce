@@ -21,8 +21,6 @@ export default function Card({
   price,
   href = "#",
 }: CardProps) {
-  // Debug: ensure badge shape is what we expect
-  // eslint-disable-next-line no-console
   console.log('Card badge prop:', badge);
   const toneTextClass = badge?.tone
     ? {
