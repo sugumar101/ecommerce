@@ -1,124 +1,51 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import ProductCard from '@/components/ProductCard';
 import Filters from '@/components/Filters';
 import Sort from '@/components/Sort';
-import { parseQueryParams, getActiveFilters } from '@/lib/utils/query';
-import {
-  mockProducts,
-  mockGenders,
-  mockColors,
-  mockSizes,
-  mockCategories,
-  priceRanges,
-  type MockProduct,
-} from '@/lib/data/mockProducts';
+import { parseFilterParams, getActiveFilters } from '@/lib/utils/query';
+import { getAllProducts } from '@/lib/actions/product';
+import { genders, colors, sizes } from '@/lib/db/schema';
+import { db } from '@/lib/db';
+import { inArray } from 'drizzle-orm';
 
 interface ProductsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-function filterProducts(products: MockProduct[], filters: ReturnType<typeof parseQueryParams>) {
-  let filtered = [...products];
+async function getFilterDisplayNames(params: { [key: string]: string | string[] | undefined }) {
+  const genderSlugs = params.gender 
+    ? (Array.isArray(params.gender) ? params.gender : [params.gender])
+    : [];
+  const colorSlugs = params.color
+    ? (Array.isArray(params.color) ? params.color : [params.color])
+    : [];
+  const sizeSlugs = params.size
+    ? (Array.isArray(params.size) ? params.size : [params.size])
+    : [];
 
-  if (filters.gender) {
-    const genderSlugs = Array.isArray(filters.gender) ? filters.gender : [filters.gender];
-    filtered = filtered.filter((product) => {
-      const gender = mockGenders.find((g) => g.id === product.genderId);
-      return gender && genderSlugs.includes(gender.slug);
-    });
-  }
-
-  if (filters.size) {
-    const sizeSlugs = Array.isArray(filters.size) ? filters.size : [filters.size];
-    filtered = filtered.filter((product) => {
-      return product.variants.some((variant) => {
-        const size = mockSizes.find((s) => s.id === variant.sizeId);
-        return size && sizeSlugs.includes(size.slug);
-      });
-    });
-  }
-
-  if (filters.color) {
-    const colorSlugs = Array.isArray(filters.color) ? filters.color : [filters.color];
-    filtered = filtered.filter((product) => {
-      return product.variants.some((variant) => {
-        const color = mockColors.find((c) => c.id === variant.colorId);
-        return color && colorSlugs.includes(color.slug);
-      });
-    });
-  }
-
-  if (filters.priceRange) {
-    const priceRangeIds = Array.isArray(filters.priceRange)
-      ? filters.priceRange
-      : [filters.priceRange];
-
-    filtered = filtered.filter((product) => {
-      const minPrice = Math.min(
-        ...product.variants.map((v) => parseFloat(v.salePrice || v.price))
-      );
-
-      return priceRangeIds.some((rangeId) => {
-        const range = priceRanges.find((r) => r.id === rangeId);
-        if (!range) return false;
-        return minPrice >= range.min && minPrice < range.max;
-      });
-    });
-  }
-
-  return filtered;
-}
-
-function sortProducts(products: MockProduct[], sortBy?: string) {
-  const sorted = [...products];
-
-  switch (sortBy) {
-    case 'price_asc':
-      return sorted.sort((a, b) => {
-        const aPrice = Math.min(...a.variants.map((v) => parseFloat(v.salePrice || v.price)));
-        const bPrice = Math.min(...b.variants.map((v) => parseFloat(v.salePrice || v.price)));
-        return aPrice - bPrice;
-      });
-
-    case 'price_desc':
-      return sorted.sort((a, b) => {
-        const aPrice = Math.min(...a.variants.map((v) => parseFloat(v.salePrice || v.price)));
-        const bPrice = Math.min(...b.variants.map((v) => parseFloat(v.salePrice || v.price)));
-        return bPrice - aPrice;
-      });
-
-    case 'newest':
-      return sorted.reverse();
-
-    case 'featured':
-    default:
-      return sorted;
-  }
-}
-
-function getProductDisplayData(product: MockProduct) {
-  const gender = mockGenders.find((g) => g.id === product.genderId);
-  const category = mockCategories.find((c) => c.id === product.categoryId);
-  const minPrice = Math.min(...product.variants.map((v) => parseFloat(v.salePrice || v.price)));
-  const maxStock = Math.max(...product.variants.map((v) => v.inStock));
+  const [genderData, colorData, sizeData] = await Promise.all([
+    genderSlugs.length > 0
+      ? db.select().from(genders).where(inArray(genders.slug, genderSlugs))
+      : Promise.resolve([]),
+    colorSlugs.length > 0
+      ? db.select().from(colors).where(inArray(colors.slug, colorSlugs))
+      : Promise.resolve([]),
+    sizeSlugs.length > 0
+      ? db.select().from(sizes).where(inArray(sizes.slug, sizeSlugs))
+      : Promise.resolve([]),
+  ]);
 
   return {
-    id: product.id,
-    name: product.name,
-    description: product.description,
-    price: minPrice.toFixed(2),
-    image: product.image,
-    brand: 'Nike',
-    category: category?.name || 'Unknown',
-    stock: maxStock,
-    gender: gender?.label || 'Unknown',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    genderMap: new Map(genderData.map((g) => [g.slug, g.label])),
+    colorMap: new Map(colorData.map((c) => [c.slug, c.name])),
+    sizeMap: new Map(sizeData.map((s) => [s.slug, s.name])),
   };
 }
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   const params = await searchParams;
+  
   const searchString = new URLSearchParams(
     Object.entries(params).reduce((acc, [key, value]) => {
       if (value) {
@@ -128,13 +55,24 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     }, {} as Record<string, string>)
   ).toString();
 
-  const filters = parseQueryParams(searchString);
+  const filterParams = parseFilterParams(params);
+  const { products: productList, totalCount } = await getAllProducts(filterParams);
+  
   const activeFilters = getActiveFilters(searchString);
+  const { genderMap, colorMap, sizeMap } = await getFilterDisplayNames(params);
 
-  let filteredProducts = filterProducts(mockProducts, filters);
-  filteredProducts = sortProducts(filteredProducts, filters.sort);
-
-  const displayProducts = filteredProducts.map(getProductDisplayData);
+  const displayProducts = productList.map((product) => ({
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    image: product.image,
+    category: product.category,
+    brand: product.brand,
+    stock: product.stock,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+  }));
 
   return (
     <div className="min-h-screen bg-light-200">
@@ -142,11 +80,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-dark-900 mb-2">All Products</h1>
           <p className="text-dark-700">
-            {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} found
+            {totalCount} {totalCount === 1 ? 'product' : 'products'} found
           </p>
         </div>
 
-        {/* Active Filters */}
         {activeFilters.length > 0 && (
           <div className="mb-6 flex flex-wrap gap-2">
             <span className="text-sm font-medium text-dark-900">Active Filters:</span>
@@ -154,17 +91,11 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               let displayValue = filter.value;
 
               if (filter.key === 'gender') {
-                const gender = mockGenders.find((g) => g.slug === filter.value);
-                displayValue = gender?.label || filter.value;
+                displayValue = genderMap.get(filter.value) || filter.value;
               } else if (filter.key === 'color') {
-                const color = mockColors.find((c) => c.slug === filter.value);
-                displayValue = color?.name || filter.value;
+                displayValue = colorMap.get(filter.value) || filter.value;
               } else if (filter.key === 'size') {
-                const size = mockSizes.find((s) => s.slug === filter.value);
-                displayValue = size?.name || filter.value;
-              } else if (filter.key === 'priceRange') {
-                const range = priceRanges.find((r) => r.id === filter.value);
-                displayValue = range?.label || filter.value;
+                displayValue = sizeMap.get(filter.value) || filter.value;
               }
 
               return (
@@ -180,30 +111,28 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         )}
 
         <div className="flex flex-col gap-8 lg:flex-row">
-          {/* Filters Sidebar */}
           <aside className="lg:w-64 lg:flex-shrink-0">
             <Suspense fallback={<div>Loading filters...</div>}>
               <Filters />
             </Suspense>
           </aside>
 
-          {/* Main Content */}
           <main className="flex-1">
-            {/* Sort Controls */}
             <div className="mb-6 flex items-center justify-between">
               <p className="text-sm text-dark-700">
-                Showing {displayProducts.length} of {mockProducts.length} products
+                Showing {displayProducts.length} of {totalCount} products
               </p>
               <Suspense fallback={<div>Loading sort...</div>}>
                 <Sort />
               </Suspense>
             </div>
 
-            {/* Products Grid */}
             {displayProducts.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {displayProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <Link key={product.id} href={`/products/${product.id}`}>
+                    <ProductCard product={product} />
+                  </Link>
                 ))}
               </div>
             ) : (
