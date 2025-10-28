@@ -1,13 +1,15 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { sql } from 'drizzle-orm';
+import { sql, eq, desc } from 'drizzle-orm';
 import {
   genders,
   brands,
   categories,
   colors,
   sizes,
+  reviews,
+  user,
 } from '@/lib/db/schema';
 import { inArray } from 'drizzle-orm';
 
@@ -486,4 +488,123 @@ export async function getProduct(productId: string): Promise<ProductDetail | nul
     })),
     genericImages: row.generic_images || [],
   };
+}
+
+export interface ProductReview {
+  id: string;
+  author: string;
+  rating: number;
+  title?: string;
+  content: string;
+  createdAt: string;
+}
+
+export async function getProductReviews(productId: string): Promise<ProductReview[]> {
+  try {
+    const productReviews = await db
+      .select({
+        id: reviews.id,
+        rating: reviews.rating,
+        content: reviews.comment,
+        createdAt: reviews.createdAt,
+        authorName: user.name,
+        authorEmail: user.email,
+      })
+      .from(reviews)
+      .innerJoin(user, eq(reviews.userId, user.id))
+      .where(eq(reviews.productId, productId))
+      .orderBy(desc(reviews.createdAt))
+      .limit(10);
+
+    return productReviews.map((review) => ({
+      id: review.id,
+      author: review.authorName || review.authorEmail || 'Anonymous',
+      rating: review.rating,
+      content: review.content,
+      createdAt: review.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    console.error('Error fetching product reviews:', error);
+    return [];
+  }
+}
+
+export interface RecommendedProduct {
+  id: string;
+  name: string;
+  price: string;
+  image: string;
+  brand: string;
+  category: string;
+}
+
+export async function getRecommendedProducts(productId: string): Promise<RecommendedProduct[]> {
+  try {
+    const query = `
+      WITH current_product AS (
+        SELECT category_id, brand_id, gender_id
+        FROM products
+        WHERE id = $1
+      ),
+      scored_products AS (
+        SELECT 
+          p.id,
+          p.name,
+          c.name AS category_name,
+          b.name AS brand_name,
+          (
+            CASE WHEN p.category_id = cp.category_id THEN 3 ELSE 0 END +
+            CASE WHEN p.brand_id = cp.brand_id THEN 2 ELSE 0 END +
+            CASE WHEN p.gender_id = cp.gender_id THEN 1 ELSE 0 END
+          ) AS score,
+          (
+            SELECT MIN(pv.price)
+            FROM product_variants pv
+            WHERE pv.product_id = p.id
+          ) AS min_price,
+          (
+            SELECT pi.url
+            FROM product_images pi
+            WHERE pi.product_id = p.id
+            ORDER BY pi.is_primary DESC, pi.sort_order ASC
+            LIMIT 1
+          ) AS image_url
+        FROM products p
+        CROSS JOIN current_product cp
+        INNER JOIN categories c ON c.id = p.category_id
+        INNER JOIN brands b ON b.id = p.brand_id
+        WHERE p.id != $1 
+          AND p.is_published = true
+      )
+      SELECT id, name, category_name, brand_name, min_price, image_url
+      FROM scored_products
+      WHERE score > 0 AND image_url IS NOT NULL AND min_price IS NOT NULL
+      ORDER BY score DESC, id
+      LIMIT 6
+    `;
+
+    interface RecommendedProductRow {
+      id: string;
+      name: string;
+      category_name: string;
+      brand_name: string;
+      min_price: string;
+      image_url: string;
+    }
+
+    const result = await db.execute(sql.raw(query, [productId]));
+    const rows = result.rows as RecommendedProductRow[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      price: Number(row.min_price).toFixed(2),
+      image: row.image_url,
+      brand: row.brand_name,
+      category: row.category_name,
+    }));
+  } catch (error) {
+    console.error('Error fetching recommended products:', error);
+    return [];
+  }
 }
