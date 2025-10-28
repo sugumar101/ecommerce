@@ -1,39 +1,54 @@
 import Image from "next/image";
 
+type Badge = { label: string; tone?: string };
+
 interface CardProps {
-  image: string;
-  badge?: string;
+  imageSrc: string;
+  badge?: Badge;
   title: string;
-  category: string;
-  colorCount?: string;
-  price: string;
+  subtitle?: string;
+  meta?: string;
+  price: number | string;
   href?: string;
 }
 
 export default function Card({
-  image,
+  imageSrc,
   badge,
   title,
-  category,
-  colorCount,
+  subtitle,
+  meta,
   price,
   href = "#",
 }: CardProps) {
+  // Debug: ensure badge shape is what we expect
+  // eslint-disable-next-line no-console
+  console.log('Card badge prop:', badge);
+  const toneTextClass = badge?.tone
+    ? {
+        orange: "text-orange-600",
+        red: "text-red-600",
+        green: "text-green-600",
+      }[badge.tone] ?? "text-gray-700"
+    : "text-gray-700";
+
   return (
     <a
       href={href}
       className="block group bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300"
     >
       <div className="relative w-full aspect-square bg-gray-100">
-        {badge && (
+        {badge?.label && (
           <div className="absolute top-4 left-4 z-10">
-            <span className="inline-block bg-white px-4 py-2 rounded-md text-sm font-medium text-green-600">
-              {badge}
+            <span
+              className={`inline-block bg-white px-4 py-2 rounded-md text-sm font-medium ${toneTextClass}`}
+            >
+              {badge.label}
             </span>
           </div>
         )}
         <Image
-          src={image}
+          src={imageSrc}
           alt={title}
           fill
           className="object-contain p-8"
@@ -44,11 +59,9 @@ export default function Card({
         <h3 className="text-lg font-medium mb-1 group-hover:text-gray-300 transition-colors">
           {title}
         </h3>
-        <p className="text-gray-400 text-sm mb-1">{category}</p>
-        {colorCount && (
-          <p className="text-gray-400 text-sm mb-2">{colorCount}</p>
-        )}
-        <p className="text-xl font-semibold mt-2">{price}</p>
+        {subtitle && <p className="text-gray-400 text-sm mb-1">{subtitle}</p>}
+        {meta && <p className="text-gray-400 text-sm mb-2">{meta}</p>}
+        <p className="text-xl font-semibold mt-2">{typeof price === "number" ? `$${price.toFixed(2)}` : price}</p>
       </div>
     </a>
   );
