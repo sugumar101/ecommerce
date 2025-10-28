@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export interface Product {
-  id: number;
+  id: number | string;
   name: string;
   description: string;
   price: string;
