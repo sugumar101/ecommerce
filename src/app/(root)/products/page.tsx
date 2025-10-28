@@ -61,7 +61,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const { genderMap, colorMap, sizeMap } = await getFilterDisplayNames(params);
 
   const displayProducts = productList.map((product) => ({
-    id: parseInt(product.id, 10),
+    id: product.id,
     name: product.name,
     description: product.description,
     price: product.price,
